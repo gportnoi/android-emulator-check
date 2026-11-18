@@ -19,6 +19,7 @@ PYEOF
 mkdir -p out
 S=https://cnt-39843425-4c5d-4389-a973-22bcda266b37.containerhub.tripleten-services.com
 adb install -r app.apk >/dev/null
+adb shell pm clear com.yandex.samokat
 echo "== api"; curl -s -m 20 -X POST $S/api/v1/courier -H 'Content-Type: application/json' -d '{"login":"notifqa","password":"1234","firstName":"Notif"}' -w ' HTTP %{http_code}\n'
 curl -s -m 20 -X POST $S/api/v1/courier/login -H 'Content-Type: application/json' -d '{"login":"notifqa","password":"1234"}' -w ' HTTP %{http_code}\n'
 adb shell am start -n com.yandex.samokat/com.yandex.scooter.app.ui.main.MainActivity >/dev/null; sleep 8
@@ -58,6 +59,8 @@ adb shell input tap 864 2164; sleep 2
 adb shell input tap 500 690; sleep 1; adb shell input text notifqa; adb shell input keyevent 4; sleep 1
 adb shell input tap 500 880; sleep 1; adb shell input text 1234; adb shell input keyevent 4; sleep 1
 adb shell input tap 540 1090; sleep 8
+adb shell uiautomator dump /sdcard/c.xml >/dev/null 2>&1; adb pull /sdcard/c.xml out/c.xml >/dev/null 2>&1
+if grep -q auth_login_button out/c.xml; then echo "LOGIN RETRY"; adb shell input keyevent 4; sleep 1; adb shell input tap 540 1090; sleep 8; adb shell uiautomator dump /sdcard/c.xml >/dev/null 2>&1; adb pull /sdcard/c.xml out/c.xml >/dev/null 2>&1; grep -q auth_login_button out/c.xml && echo "LOGIN FAILED" || echo "LOGIN OK on retry"; else echo "LOGIN OK"; fi
 adb shell input swipe 540 700 540 1900 500; sleep 4
 st all_orders
 python3 tapt.py Accept; sleep 2
