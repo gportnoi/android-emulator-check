@@ -31,9 +31,16 @@ for m in re.finditer(r'<node [^>]*>',x):
     print(g('class').split('.')[-1],'|',g('resource-id').split('/')[-1],'|',g('text'),'|',g('content-desc'),'|',g('clickable'),'|',g('bounds'))
 PY
 }
-echo "== UI1"; dumpui
-python3 snap.py before
-adb shell input tap 995 2168; sleep 3
-python3 snap.py after
-echo "== UI2"; dumpui
-adb exec-out screencap -p > out/s2.png
+st() { echo "== $1"; sleep 2; dumpui | grep -v '^\(FrameLayout\|LinearLayout\|ViewGroup\|View\) |  |  |  | false'; python3 snap.py $1; }
+st login_screen
+adb shell input tap 995 2168; sleep 2
+adb shell input tap 400 2164; sleep 1
+adb shell input text https://cnt-3f7e5c1c-920a-484f-b83d-c092ad915663.containerhub.tripleten-services.com; sleep 1
+adb shell input tap 864 2164; sleep 2
+st url_set
+adb shell input tap 500 690; adb shell input text notifqa
+adb shell input tap 500 880; adb shell input text 1234
+adb shell input keyevent 111
+st login_filled
+adb shell input tap 540 1090; sleep 8
+st after_login
