@@ -1,3 +1,21 @@
+cat > snap.py <<'PYEOF'
+import sys,zlib,struct,base64,subprocess
+raw=subprocess.run(['adb','exec-out','screencap'],capture_output=True).stdout
+w,h=struct.unpack('<II',raw[:8]); off=len(raw)-w*h*4; px=raw[off:]
+f=4; W,H=w//f,h//f
+rows=[]
+for y in range(H):
+    r=bytearray([0]); base=y*f*w*4
+    for x in range(W):
+        i=base+x*f*4; r+=px[i:i+3]
+    rows.append(bytes(r))
+def ch(t,d): c=struct.pack('>I',len(d))+t+d; return c+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
+png=b'\x89PNG\r\n\x1a\n'+ch(b'IHDR',struct.pack('>IIBBBBB',W,H,8,2,0,0,0))+ch(b'IDAT',zlib.compress(b''.join(rows),9))+ch(b'IEND',b'')
+b=base64.b64encode(png).decode()
+print('SNAP',sys.argv[1],len(b))
+for i in range(0,len(b),180): print('S:'+b[i:i+180])
+print('SNAPEND')
+PYEOF
 mkdir -p out
 S=https://cnt-3f7e5c1c-920a-484f-b83d-c092ad915663.containerhub.tripleten-services.com
 adb install -r app.apk >/dev/null
@@ -14,6 +32,8 @@ for m in re.finditer(r'<node [^>]*>',x):
 PY
 }
 echo "== UI1"; dumpui
+python3 snap.py before
 adb shell input tap 995 2168; sleep 3
+python3 snap.py after
 echo "== UI2"; dumpui
 adb exec-out screencap -p > out/s2.png
