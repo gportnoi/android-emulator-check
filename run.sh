@@ -64,9 +64,11 @@ python3 tapt.py Yes; sleep 4
 st after_accept
 python3 tapt.py "My orders"; sleep 3
 st my_orders
+adb root; sleep 3
 adb shell settings put global auto_time 0; adb shell settings put global auto_time_zone 0
-adb shell date 111821562026.30; sleep 2; adb shell date
-sleep 200; adb shell date
+adb shell date 111821552026.00; sleep 3; adb shell date
+now=$(date -u +%s); tgt=$(date -u -d '2026-11-18 22:00:40' +%s); slp=$((tgt-now)); [ $slp -lt 0 ] && slp=0; echo "sleep $slp"; sleep $slp
+adb shell date
 echo "== notif dumpsys"
 adb shell dumpsys notification --noredact | grep -iE 'tickerText|android.title|android.text|pkg=com.yandex' | head -30
 adb shell cmd statusbar expand-notifications; sleep 3
@@ -74,13 +76,13 @@ st shade
 python3 tapt.py "2 hours"; sleep 4
 st after_tap_notif
 adb shell dumpsys window | grep -i mCurrentFocus
+adb shell input keyevent 4; sleep 2
 adb shell cmd connectivity airplane-mode enable; sleep 4
-adb shell input keyevent 4; sleep 1
-adb shell am start -n com.yandex.samokat/com.yandex.scooter.app.ui.main.MainActivity >/dev/null; sleep 4
-python3 tapt.py Complete; sleep 3
+python3 tapt.py "My orders"; sleep 3
+python3 tapt.py "Complete"; sleep 3
 st offline_popup
-python3 tapt.py Ok; sleep 2
+python3 tapt.py "OK"; sleep 2
 st offline_ok
-python3 tapt.py Complete; sleep 3
+python3 tapt.py "Complete"; sleep 3
 st offline_popup2
 adb shell cmd connectivity airplane-mode disable
