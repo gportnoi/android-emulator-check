@@ -17,3 +17,6 @@ echo "== launch"; adb shell monkey -p com.yandex.scooter.app -c android.intent.c
 } > $log 2>&1
 adb exec-out screencap -p > out/s1.png
 adb shell uiautomator dump /sdcard/u1.xml >> $log 2>&1; adb pull /sdcard/u1.xml out/u1.xml >> $log 2>&1
+cat $log
+echo "== UI texts"
+grep -o 'text="[^"]\+"\|content-desc="[^"]\+"\|resource-id="[^"]\+"' out/u1.xml | sort -u | head -60
