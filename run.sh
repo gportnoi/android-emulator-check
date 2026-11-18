@@ -17,7 +17,7 @@ for i in range(0,len(b),180): print('S:%s:%03d:'%(sys.argv[1],i//180)+b[i:i+180]
 print('SNAPEND')
 PYEOF
 mkdir -p out
-S=https://cnt-3f7e5c1c-920a-484f-b83d-c092ad915663.containerhub.tripleten-services.com
+S=https://cnt-39843425-4c5d-4389-a973-22bcda266b37.containerhub.tripleten-services.com
 adb install -r app.apk >/dev/null
 echo "== api"; curl -s -m 20 -X POST $S/api/v1/courier -H 'Content-Type: application/json' -d '{"login":"notifqa","password":"1234","firstName":"Notif"}' -w ' HTTP %{http_code}\n'
 curl -s -m 20 -X POST $S/api/v1/courier/login -H 'Content-Type: application/json' -d '{"login":"notifqa","password":"1234"}' -w ' HTTP %{http_code}\n'
@@ -52,7 +52,7 @@ curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{
 adb shell am start -n com.yandex.samokat/com.yandex.scooter.app.ui.main.MainActivity >/dev/null; sleep 8
 adb shell input tap 995 2168; sleep 2
 adb shell input tap 400 2164; sleep 1
-adb shell input text https://cnt-3f7e5c1c-920a-484f-b83d-c092ad915663.containerhub.tripleten-services.com; sleep 1
+adb shell input text https://cnt-39843425-4c5d-4389-a973-22bcda266b37.containerhub.tripleten-services.com; sleep 1
 adb shell input keyevent 4; sleep 1
 adb shell input tap 864 2164; sleep 2
 adb shell input tap 500 690; sleep 1; adb shell input text notifqa; adb shell input keyevent 4; sleep 1
