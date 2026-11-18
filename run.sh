@@ -51,14 +51,30 @@ echo "== order api"
 curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Ivan","lastName":"Petrov","address":"State St 1214","metroStation":4,"phone":"+78003553535","rentTime":5,"deliveryDate":"2026-11-18","comment":"call me","color":["BLACK"]}' -w ' HTTP %{http_code}\n'
 curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Olga","lastName":"Sidorova","address":"Broadway 55","metroStation":2,"phone":"+78003553536","rentTime":3,"deliveryDate":"2026-11-19","comment":"second door","color":["GREY"]}' -w ' HTTP %{http_code}\n'
 adb shell am start -n com.yandex.samokat/com.yandex.scooter.app.ui.main.MainActivity >/dev/null; sleep 8
-adb shell input tap 995 2168; sleep 2
-adb shell input tap 400 2164; sleep 1
-adb shell input text https://cnt-22dd43ec-87f1-44c8-89b0-a12908839b56.containerhub.tripleten-services.com; sleep 1
+adb shell input tap 995 2168; sleep 3
+st backend_popup
+cat > tapfield.py <<'PYF'
+import re,subprocess
+subprocess.run(['adb','shell','uiautomator','dump','/sdcard/f.xml'],capture_output=True)
+subprocess.run(['adb','pull','/sdcard/f.xml','/tmp/f.xml'],capture_output=True)
+x=open('/tmp/f.xml').read()
+for m in re.finditer(r'<node [^>]*>',x):
+    n=m.group(0)
+    if 'EditText' in n:
+        b=list(map(int,re.findall(r'\d+',re.search(r'bounds="([^"]*)"',n).group(1))))
+        cx,cy=(b[0]+b[2])//2,(b[1]+b[3])//2
+        print('tapfield',cx,cy); subprocess.run(['adb','shell','input','tap',str(cx),str(cy)]); break
+PYF
+python3 tapfield.py; sleep 1
+adb shell input text $S; sleep 1
+st backend_typed
 adb shell input keyevent 4; sleep 1
-adb shell input tap 864 2164; sleep 2
+python3 tapt.py Ok; sleep 2
+st backend_closed
 adb shell input tap 500 690; sleep 1; adb shell input text notifqa; adb shell input keyevent 4; sleep 1
 adb shell input tap 500 880; sleep 1; adb shell input text 1234; adb shell input keyevent 4; sleep 1
-adb shell input tap 540 1090
+adb shell input tap 540 1090; sleep 3
+st after_login_tap
 for i in $(seq 1 14); do sleep 5; adb shell uiautomator dump /sdcard/c.xml >/dev/null 2>&1; adb pull /sdcard/c.xml out/c.xml >/dev/null 2>&1; if grep -qE 'tab_all|swipe_refresh_container|no_order' out/c.xml; then echo "LOGIN OK after $((i*5))s"; break; fi; done
 grep -qE 'tab_all|swipe_refresh_container|no_order' out/c.xml && echo LOGIN CONFIRMED || echo LOGIN FAILED
 adb shell input swipe 540 700 540 1900 500; sleep 4
