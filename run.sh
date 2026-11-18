@@ -13,7 +13,7 @@ def ch(t,d): c=struct.pack('>I',len(d))+t+d; return c+struct.pack('>I',zlib.crc3
 png=b'\x89PNG\r\n\x1a\n'+ch(b'IHDR',struct.pack('>IIBBBBB',W,H,8,2,0,0,0))+ch(b'IDAT',zlib.compress(b''.join(rows),9))+ch(b'IEND',b'')
 b=base64.b64encode(png).decode()
 print('SNAP',sys.argv[1],len(b))
-for i in range(0,len(b),180): print('S:'+b[i:i+180])
+for i in range(0,len(b),180): print('S:%s:%03d:'%(sys.argv[1],i//180)+b[i:i+180])
 print('SNAPEND')
 PYEOF
 mkdir -p out
