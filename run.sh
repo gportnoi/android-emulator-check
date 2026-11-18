@@ -58,9 +58,9 @@ adb shell input keyevent 4; sleep 1
 adb shell input tap 864 2164; sleep 2
 adb shell input tap 500 690; sleep 1; adb shell input text notifqa; adb shell input keyevent 4; sleep 1
 adb shell input tap 500 880; sleep 1; adb shell input text 1234; adb shell input keyevent 4; sleep 1
-adb shell input tap 540 1090; sleep 8
-adb shell uiautomator dump /sdcard/c.xml >/dev/null 2>&1; adb pull /sdcard/c.xml out/c.xml >/dev/null 2>&1
-if grep -q auth_login_button out/c.xml; then echo "LOGIN RETRY"; adb shell input keyevent 4; sleep 1; adb shell input tap 540 1090; sleep 8; adb shell uiautomator dump /sdcard/c.xml >/dev/null 2>&1; adb pull /sdcard/c.xml out/c.xml >/dev/null 2>&1; grep -q auth_login_button out/c.xml && echo "LOGIN FAILED" || echo "LOGIN OK on retry"; else echo "LOGIN OK"; fi
+adb shell input tap 540 1090
+for i in $(seq 1 14); do sleep 5; adb shell uiautomator dump /sdcard/c.xml >/dev/null 2>&1; adb pull /sdcard/c.xml out/c.xml >/dev/null 2>&1; if grep -qE 'tab_all|swipe_refresh_container|no_order' out/c.xml; then echo "LOGIN OK after $((i*5))s"; break; fi; done
+grep -qE 'tab_all|swipe_refresh_container|no_order' out/c.xml && echo LOGIN CONFIRMED || echo LOGIN FAILED
 adb shell input swipe 540 700 540 1900 500; sleep 4
 st all_orders
 python3 tapt.py Accept; sleep 2
