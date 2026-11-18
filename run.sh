@@ -32,15 +32,42 @@ for m in re.finditer(r'<node [^>]*>',x):
 PY
 }
 st() { echo "== $1"; sleep 2; dumpui | grep -v '^\(FrameLayout\|LinearLayout\|ViewGroup\|View\) |  |  |  | false'; python3 snap.py $1; }
-st login_screen
+cat > tapt.py <<'PYT'
+import re,sys,subprocess
+subprocess.run(['adb','shell','uiautomator','dump','/sdcard/t.xml'],capture_output=True)
+subprocess.run(['adb','pull','/sdcard/t.xml','/tmp/t.xml'],capture_output=True)
+x=open('/tmp/t.xml').read()
+for m in re.finditer(r'<node [^>]*>',x):
+    n=m.group(0)
+    t=re.search(r' text="([^"]*)"',n).group(1)+'|'+re.search(r'content-desc="([^"]*)"',n).group(1)
+    if sys.argv[1] in t:
+        b=list(map(int,re.findall(r'\d+',re.search(r'bounds="([^"]*)"',n).group(1))))
+        cx,cy=(b[0]+b[2])//2,(b[1]+b[3])//2
+        print('tap',sys.argv[1],cx,cy); subprocess.run(['adb','shell','input','tap',str(cx),str(cy)]); break
+else: print('NOT FOUND',sys.argv[1])
+PYT
+echo "== order api"
+curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Ivan","lastName":"Petrov","address":"State St 1214","metroStation":4,"phone":"+78003553535","rentTime":5,"deliveryDate":"2026-11-18","comment":"call me","color":["BLACK"]}' -w ' HTTP %{http_code}\n'
 adb shell input tap 995 2168; sleep 2
 adb shell input tap 400 2164; sleep 1
 adb shell input text https://cnt-3f7e5c1c-920a-484f-b83d-c092ad915663.containerhub.tripleten-services.com; sleep 1
 adb shell input keyevent 4; sleep 1
 adb shell input tap 864 2164; sleep 2
-st url_set
 adb shell input tap 500 690; sleep 1; adb shell input text notifqa; adb shell input keyevent 4; sleep 1
 adb shell input tap 500 880; sleep 1; adb shell input text 1234; adb shell input keyevent 4; sleep 1
-st login_filled
 adb shell input tap 540 1090; sleep 8
-st after_login
+adb shell input swipe 540 700 540 1900 500; sleep 4
+st all_orders
+python3 tapt.py Accept; sleep 2
+st accept_dialog
+python3 tapt.py Yes; sleep 4
+st after_accept
+python3 tapt.py "My orders"; sleep 3
+st my_orders
+adb shell date 111821582026.00; sleep 1; adb shell date
+sleep 100
+adb shell dumpsys notification --noredact | grep -iE 'tickerText|android.title|android.text|pkg=com.yandex' | head -20
+adb shell cmd statusbar expand-notifications; sleep 3
+st shade
+python3 tapt.py "2 hours"; sleep 4
+st after_tap_notif
