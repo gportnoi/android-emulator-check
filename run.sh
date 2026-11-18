@@ -1,5 +1,5 @@
 mkdir -p out
-S=https://cnt-ab2d8937-23a9-41e0-bad9-302ddfe8d9ca.containerhub.tripleten-services.com
+S=https://cnt-3f7e5c1c-920a-484f-b83d-c092ad915663.containerhub.tripleten-services.com
 adb install -r app.apk >/dev/null
 echo "== api"; curl -s -m 20 -X POST $S/api/v1/courier -H 'Content-Type: application/json' -d '{"login":"notifqa","password":"1234","firstName":"Notif"}' -w ' HTTP %{http_code}\n'
 curl -s -m 20 -X POST $S/api/v1/courier/login -H 'Content-Type: application/json' -d '{"login":"notifqa","password":"1234"}' -w ' HTTP %{http_code}\n'
@@ -14,3 +14,6 @@ for m in re.finditer(r'<node [^>]*>',x):
 PY
 }
 echo "== UI1"; dumpui
+adb shell input tap 995 2168; sleep 3
+echo "== UI2"; dumpui
+adb exec-out screencap -p > out/s2.png
