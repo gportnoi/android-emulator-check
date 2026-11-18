@@ -48,6 +48,8 @@ else: print('NOT FOUND',sys.argv[1])
 PYT
 echo "== order api"
 curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Ivan","lastName":"Petrov","address":"State St 1214","metroStation":4,"phone":"+78003553535","rentTime":5,"deliveryDate":"2026-11-18","comment":"call me","color":["BLACK"]}' -w ' HTTP %{http_code}\n'
+curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Olga","lastName":"Sidorova","address":"Broadway 55","metroStation":2,"phone":"+78003553536","rentTime":3,"deliveryDate":"2026-11-19","comment":"second door","color":["GREY"]}' -w ' HTTP %{http_code}\n'
+adb shell am start -n com.yandex.samokat/com.yandex.scooter.app.ui.main.MainActivity >/dev/null; sleep 8
 adb shell input tap 995 2168; sleep 2
 adb shell input tap 400 2164; sleep 1
 adb shell input text https://cnt-3f7e5c1c-920a-484f-b83d-c092ad915663.containerhub.tripleten-services.com; sleep 1
@@ -59,6 +61,8 @@ adb shell input tap 540 1090; sleep 8
 adb shell input swipe 540 700 540 1900 500; sleep 4
 st all_orders
 python3 tapt.py Accept; sleep 2
+python3 tapt.py Yes; sleep 4
+python3 tapt.py Accept; sleep 2
 st accept_dialog
 python3 tapt.py Yes; sleep 4
 st after_accept
@@ -66,11 +70,10 @@ python3 tapt.py "My orders"; sleep 3
 st my_orders
 adb root; sleep 3
 adb shell settings put global auto_time 0; adb shell settings put global auto_time_zone 0
-adb shell date 111821552026.00; sleep 3; adb shell date
-now=$(date -u +%s); tgt=$(date -u -d '2026-11-18 22:00:40' +%s); slp=$((tgt-now)); [ $slp -lt 0 ] && slp=0; echo "sleep $slp"; sleep $slp
-adb shell date
-echo "== notif dumpsys"
-adb shell dumpsys notification --noredact | grep -iE 'tickerText|android.title|android.text|pkg=com.yandex' | head -30
+echo "== alarms"
+adb shell dumpsys alarm | grep -iB2 -A6 yandex | head -40
+adb shell date 111921552026.00; sleep 3; adb shell date
+for i in 1 2 3 4 5 6 7 8 9 10 11 12; do sleep 20; adb shell date +%H:%M:%S; adb shell dumpsys notification --noredact | grep -iE 'tickerText|android.title|android.text' | grep -viE 'Serial|bootloader' | head -6; done
 adb shell cmd statusbar expand-notifications; sleep 3
 st shade
 python3 tapt.py "2 hours"; sleep 4
