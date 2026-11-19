@@ -85,19 +85,45 @@ grep -qE 'tab_all|swipe_refresh_container|no_order' out/c.xml && echo LOGIN CONF
 adb shell input swipe 540 700 540 1900 500; sleep 4
 st all_orders
 python3 tapt.py Accept; sleep 2
-python3 tapt.py Yes; sleep 4
-python3 tapt.py Accept; sleep 2
 st accept_dialog
 python3 tapt.py Yes; sleep 4
 st after_accept
+adb shell input swipe 540 700 540 1900 500; sleep 3
+cat > accept_b.py <<'PYB'
+import re,subprocess
+subprocess.run(['adb','shell','uiautomator','dump','/sdcard/b.xml'],capture_output=True)
+subprocess.run(['adb','pull','/sdcard/b.xml','/tmp/b.xml'],capture_output=True)
+x=open('/tmp/b.xml').read()
+ay=None; btns=[]
+for m in re.finditer(r'<node [^>]*>',x):
+    n=m.group(0)
+    t=re.search(r' text="([^"]*)"',n)
+    t=t.group(1) if t else ''
+    b=re.search(r'bounds="([^"]*)"',n)
+    if not b: continue
+    bb=list(map(int,re.findall(r'\d+',b.group(1))))
+    cy=(bb[1]+bb[3])//2; cx=(bb[0]+bb[2])//2
+    if t=='Broadway 55': ay=cy
+    if t=='Accept': btns.append((cx,cy))
+if ay is not None and btns:
+    btns.sort(key=lambda p:abs(p[1]-ay))
+    print('tap Accept-B',btns[0]); subprocess.run(['adb','shell','input','tap',str(btns[0][0]),str(btns[0][1])])
+else: print('ACCEPT-B NOT FOUND', ay, len(btns))
+PYB
+python3 accept_b.py; sleep 2
+python3 tapt.py Yes; sleep 4
 python3 tapt.py "My orders"; sleep 3
 st my_orders
+adb shell uiautomator dump /sdcard/m.xml >/dev/null 2>&1; adb pull /sdcard/m.xml out/m.xml >/dev/null 2>&1
+grep -q 'Broadway 55' out/m.xml && echo ORDER B IN MY ORDERS || echo ORDER B MISSING
+grep -q 'State St 1214' out/m.xml && echo ORDER A IN MY ORDERS || echo ORDER A MISSING
 adb root; sleep 3
 adb shell settings put global auto_time 0; adb shell settings put global auto_time_zone 0
 echo "== alarms"
 adb shell dumpsys alarm | grep -iB2 -A6 yandex | head -40
 adb shell date 111921552026.00; sleep 3; adb shell date
 for i in 1 2 3 4 5 6 7 8 9 10 11 12; do sleep 20; adb shell date +%H:%M:%S; adb shell dumpsys notification --noredact | grep -iE 'tickerText|android.title|android.text' | grep -viE 'Serial|bootloader' | head -6; done
+echo "== notifdump"; adb shell dumpsys notification --noredact | grep -iE 'NotificationRecord|pkg=com.yandex|tickerText|android.title|android.text' | head -40
 adb shell cmd statusbar expand-notifications; sleep 3
 st shade
 python3 tapt.py "2 hours"; sleep 4
