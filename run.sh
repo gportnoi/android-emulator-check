@@ -17,7 +17,7 @@ for i in range(0,len(b),180): print('S:%s:%03d:'%(sys.argv[1],i//180)+b[i:i+180]
 print('SNAPEND')
 PYEOF
 mkdir -p out
-S=https://cnt-fa4e77f1-da00-4409-80ef-ac607335cb00.containerhub.tripleten-services.com
+S=https://cnt-76221164-9a7a-4836-acdc-61eaa9520d83.containerhub.tripleten-services.com
 adb root; sleep 3
 adb install -r app.apk >/dev/null
 adb shell pm clear com.yandex.samokat
@@ -116,6 +116,40 @@ st backend_typed
 adb shell input keyevent 4; sleep 1
 python3 tapt.py Ok; sleep 2
 st backend_closed
+echo "== EXTRA-A/B: login screen offline popup tests"
+adb shell input tap 500 690; sleep 1; adb shell input text dupc; adb shell input keyevent 4; sleep 1
+adb shell input tap 500 880; sleep 1; adb shell input text 1234; adb shell input keyevent 4; sleep 1
+adb shell cmd connectivity airplane-mode enable; sleep 4
+adb shell input tap 540 1090; sleep 3
+st extra_a_login_airplane
+adb shell uiautomator dump /sdcard/la.xml >/dev/null 2>&1; adb pull /sdcard/la.xml out/la.xml >/dev/null 2>&1
+grep -qiE 'No Internet|no_internet' out/la.xml && echo "EXTRA-A RESULT: popup SHOWN after Login tap in airplane mode" || echo "EXTRA-A RESULT: NO POPUP after Login tap in airplane mode"
+grep -qE 'tab_all' out/la.xml && echo "EXTRA-A RESULT: UNEXPECTED main screen visible (airplane)" || echo "EXTRA-A RESULT: still on login screen after Login tap (airplane)"
+python3 tapt.py OK; sleep 3
+st extra_a_after_ok
+adb shell uiautomator dump /sdcard/lb.xml >/dev/null 2>&1; adb pull /sdcard/lb.xml out/lb.xml >/dev/null 2>&1
+grep -qE 'tab_all' out/lb.xml && echo "EXTRA-A RESULT: LOGGED IN after OK (airplane)" || echo "EXTRA-A RESULT: still on login screen after OK (airplane)"
+adb shell cmd connectivity airplane-mode disable; sleep 5
+adb shell svc wifi disable; adb shell svc data disable; sleep 4
+adb shell dumpsys wifi | grep -m1 'Wi-Fi is' | sed 's/^/EXTRA-B WIFI STATE: /'
+adb shell input tap 540 1090; sleep 3
+st extra_b_login_nodata
+adb shell uiautomator dump /sdcard/lc.xml >/dev/null 2>&1; adb pull /sdcard/lc.xml out/lc.xml >/dev/null 2>&1
+grep -qiE 'No Internet|no_internet' out/lc.xml && echo "EXTRA-B RESULT: popup SHOWN after Login tap (wifi+data off)" || echo "EXTRA-B RESULT: NO POPUP after Login tap (wifi+data off)"
+python3 tapt.py OK; sleep 4
+st extra_b_after_ok
+adb shell uiautomator dump /sdcard/ld.xml >/dev/null 2>&1; adb pull /sdcard/ld.xml out/ld.xml >/dev/null 2>&1
+grep -qE 'tab_all' out/ld.xml && echo "EXTRA-B RESULT: LOGGED IN after OK (wifi+data off)" || echo "EXTRA-B RESULT: still on login screen after OK (wifi+data off)"
+adb shell svc wifi enable; adb shell svc data enable; sleep 6
+adb shell pm clear com.yandex.samokat; sleep 2
+adb shell am force-stop com.yandex.samokat
+adb shell am start -n com.yandex.samokat/com.yandex.scooter.app.ui.main.MainActivity >/dev/null; sleep 6
+st extra_reset_popup
+python3 tapfield.py; sleep 1
+adb shell input text $S; sleep 1
+adb shell input keyevent 4; sleep 1
+python3 tapt.py Ok; sleep 2
+st extra_reset_done
 adb shell input tap 500 690; sleep 1; adb shell input text dupc; adb shell input keyevent 4; sleep 1
 adb shell input tap 500 880; sleep 1; adb shell input text 1234; adb shell input keyevent 4; sleep 1
 adb shell input tap 540 1090; sleep 3
@@ -214,6 +248,30 @@ d=json.load(open('out/orders2.json'))
 os=[o for o in d.get('orders',[]) if o.get('courierId') is not None]
 print('AFTER COMPLETE - STATUSES:',[(o['id'],o.get('status')) for o in os])
 PY
+cat > tapcard.py <<'PYC'
+import re,subprocess
+subprocess.run(['adb','shell','uiautomator','dump','/sdcard/card.xml'],capture_output=True)
+subprocess.run(['adb','pull','/sdcard/card.xml','/tmp/card.xml'],capture_output=True)
+x=open('/tmp/card.xml').read()
+best=None
+for m in re.finditer(r'<node [^>]*>',x):
+    n=m.group(0)
+    rid=re.search(r'resource-id="([^"]*)"',n)
+    if rid and 'card' in rid.group(1).lower():
+        b=list(map(int,re.findall(r'\d+',re.search(r'bounds="([^"]*)"',n).group(1))))
+        cx=(b[0]+b[2])//2; cy=b[1]+(b[3]-b[1])//5
+        best=(cx,cy,rid.group(1)); break
+if best:
+    print('tapcard',best); subprocess.run(['adb','shell','input','tap',str(best[0]),str(best[1])])
+else:
+    print('tapcard NO CARD NODE FOUND')
+PYC
+echo "== EXTRA-C online card tap"
+python3 tapcard.py; sleep 3
+st extra_c_online
+adb shell uiautomator dump /sdcard/ec.xml >/dev/null 2>&1; adb pull /sdcard/ec.xml out/ec.xml >/dev/null 2>&1
+grep -q 'tab_all' out/ec.xml && echo "EXTRA-C ONLINE RESULT: still on main tabs after card tap" || echo "EXTRA-C ONLINE RESULT: left main screen after card tap (detail opened?)"
+grep -q 'tab_all' out/ec.xml || { adb shell input keyevent 4; sleep 2; }
 echo "== offline tests"
 adb shell cmd connectivity airplane-mode enable; sleep 4
 python3 tapid.py tab_all; sleep 3
@@ -239,6 +297,11 @@ st popup_outside2
 popcheck "after tap outside popup"
 python3 tapt.py "Complete"; sleep 3
 popcheck "retriggered before net restore"
+python3 tapt.py "OK"; sleep 2
+echo "== EXTRA-C offline card tap"
+python3 tapcard.py; sleep 3
+st extra_c_offline
+popcheck "EXTRA-C after order card tap, airplane on"
 adb shell cmd connectivity airplane-mode disable; sleep 5
 st popup_still_open_on_net
 popcheck "after internet restored with popup open"
