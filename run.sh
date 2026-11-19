@@ -117,10 +117,12 @@ st my_orders
 adb shell uiautomator dump /sdcard/m.xml >/dev/null 2>&1; adb pull /sdcard/m.xml out/m.xml >/dev/null 2>&1
 grep -q 'Broadway 55' out/m.xml && echo ORDER B IN MY ORDERS || echo ORDER B MISSING
 grep -q 'State St 1214' out/m.xml && echo ORDER A IN MY ORDERS || echo ORDER A MISSING
+adb shell input keyevent 3; sleep 3
 adb root; sleep 3
 adb shell settings put global auto_time 0; adb shell settings put global auto_time_zone 0
 echo "== alarms"
 adb shell dumpsys alarm | grep -iB2 -A6 yandex | head -40
+adb shell dumpsys jobscheduler | grep -iB2 -A6 yandex | head -40
 adb shell date 111921552026.00; sleep 3; adb shell date
 for i in 1 2 3 4 5 6 7 8 9 10 11 12; do sleep 20; adb shell date +%H:%M:%S; adb shell dumpsys notification --noredact | grep -iE 'tickerText|android.title|android.text' | grep -viE 'Serial|bootloader' | head -6; done
 echo "== notifdump"; adb shell dumpsys notification --noredact | grep -iE 'NotificationRecord|pkg=com.yandex|tickerText|android.title|android.text' | head -40
