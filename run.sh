@@ -22,8 +22,9 @@ adb root; sleep 3
 adb install -r app.apk >/dev/null
 adb shell pm clear com.yandex.samokat
 adb shell am force-stop com.yandex.samokat
-echo "== api"; curl -s -m 20 -X POST $S/api/v1/courier -H 'Content-Type: application/json' -d '{"login":"notifqa","password":"1234","firstName":"Notif"}' -w ' HTTP %{http_code}\n'
-curl -s -m 20 -X POST $S/api/v1/courier/login -H 'Content-Type: application/json' -d '{"login":"notifqa","password":"1234"}' -w ' HTTP %{http_code}\n'
+echo "== api"; curl -s -m 20 -X POST $S/api/v1/courier -H 'Content-Type: application/json' -d '{"login":"notifb","password":"1234","firstName":"NotifB"}' -w ' HTTP %{http_code}\n'
+curl -s -m 20 -X POST $S/api/v1/courier/login -H 'Content-Type: application/json' -d '{"login":"notifb","password":"1234"}' -w ' HTTP %{http_code}\n'
+adb shell pm list packages | grep -i gms | head -3
 
 dumpui() { adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1; adb pull /sdcard/u.xml out/u.xml >/dev/null 2>&1; python3 - <<'PY'
 import re
@@ -76,7 +77,7 @@ st backend_typed
 adb shell input keyevent 4; sleep 1
 python3 tapt.py Ok; sleep 2
 st backend_closed
-adb shell input tap 500 690; sleep 1; adb shell input text notifqa; adb shell input keyevent 4; sleep 1
+adb shell input tap 500 690; sleep 1; adb shell input text notifb; adb shell input keyevent 4; sleep 1
 adb shell input tap 500 880; sleep 1; adb shell input text 1234; adb shell input keyevent 4; sleep 1
 adb shell input tap 540 1090; sleep 3
 st after_login_tap
@@ -117,6 +118,7 @@ st my_orders
 adb shell uiautomator dump /sdcard/m.xml >/dev/null 2>&1; adb pull /sdcard/m.xml out/m.xml >/dev/null 2>&1
 grep -q 'Broadway 55' out/m.xml && echo ORDER B IN MY ORDERS || echo ORDER B MISSING
 grep -q 'State St 1214' out/m.xml && echo ORDER A IN MY ORDERS || echo ORDER A MISSING
+grep -o 'Complete' out/m.xml | wc -l | sed "s/^/COMPLETE COUNT /"
 adb shell input keyevent 3; sleep 3
 adb root; sleep 3
 adb shell settings put global auto_time 0; adb shell settings put global auto_time_zone 0
@@ -124,7 +126,7 @@ echo "== alarms"
 adb shell dumpsys alarm | grep -iB2 -A6 yandex | head -40
 adb shell dumpsys jobscheduler | grep -iB2 -A6 yandex | head -40
 adb shell date 111921552026.00; sleep 3; adb shell date
-for i in 1 2 3 4 5 6 7 8 9 10 11 12; do sleep 20; adb shell date +%H:%M:%S; adb shell dumpsys notification --noredact | grep -iE 'tickerText|android.title|android.text' | grep -viE 'Serial|bootloader' | head -6; done
+for i in $(seq 1 20); do sleep 20; adb shell date +%H:%M:%S; adb shell dumpsys notification --noredact | grep -iE 'tickerText|android.title|android.text' | grep -viE 'Serial|bootloader' | head -6; done
 echo "== notifdump"; adb shell dumpsys notification --noredact | grep -iE 'NotificationRecord|pkg=com.yandex|tickerText|android.title|android.text' | head -40
 adb shell cmd statusbar expand-notifications; sleep 3
 st shade
@@ -132,12 +134,19 @@ python3 tapt.py "2 hours"; sleep 4
 st after_tap_notif
 adb shell dumpsys window | grep -i mCurrentFocus
 adb shell input keyevent 4; sleep 2
+adb shell am start -n com.yandex.samokat/com.yandex.scooter.app.ui.main.MainActivity >/dev/null; sleep 5
 adb shell cmd connectivity airplane-mode enable; sleep 4
 python3 tapt.py "My orders"; sleep 3
 python3 tapt.py "Complete"; sleep 3
 st offline_popup
+adb shell input tap 540 700; sleep 2
+st popup_tapoutside
+adb shell input keyevent 4; sleep 2
+st popup_back
+adb shell cmd connectivity airplane-mode disable; sleep 4
+st popup_netback
 python3 tapt.py "OK"; sleep 2
 st offline_ok
 python3 tapt.py "Complete"; sleep 3
-st offline_popup2
+st popup_after_restore
 adb shell cmd connectivity airplane-mode disable
