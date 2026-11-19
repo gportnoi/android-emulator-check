@@ -113,6 +113,120 @@ PYF
 python3 tapfield.py; sleep 1
 adb shell input text $S; sleep 1
 st backend_typed
+import sys,zlib,struct,base64,subprocess
+raw=subprocess.run(['adb','exec-out','screencap'],capture_output=True).stdout
+w,h=struct.unpack('<II',raw[:8]); off=len(raw)-w*h*4; px=raw[off:]
+f=4; W,H=w//f,h//f
+rows=[]
+for y in range(H):
+    r=bytearray([0]); base=y*f*w*4
+    for x in range(W):
+        i=base+x*f*4; r+=px[i:i+3]
+    rows.append(bytes(r))
+def ch(t,d): c=struct.pack('>I',len(d))+t+d; return c+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
+png=b'\x89PNG\r\n\x1a\n'+ch(b'IHDR',struct.pack('>IIBBBBB',W,H,8,2,0,0,0))+ch(b'IDAT',zlib.compress(b''.join(rows),9))+ch(b'IEND',b'')
+b=base64.b64encode(png).decode()
+print('SNAP',sys.argv[1],len(b))
+for i in range(0,len(b),180): print('S:%s:%03d:'%(sys.argv[1],i//180)+b[i:i+180])
+print('SNAPEND')
+PYEOF
+mkdir -p out
+S=https://cnt-dcfde9ec-e6f7-4d35-adc4-302893e1cc2d.containerhub.tripleten-services.com
+adb root; sleep 3
+adb install -r app.apk >/dev/null
+adb shell pm clear com.yandex.samokat
+adb shell am force-stop com.yandex.samokat
+echo "== server date header"; curl -s -m 20 -D - -o /dev/null $S/api/v1/ping/ | grep -iE '^HTTP|^date'
+echo "== api"; curl -s -m 20 -X POST $S/api/v1/courier -H 'Content-Type: application/json' -d '{"login":"dupc","password":"1234","firstName":"DupC"}' -w ' HTTP %{http_code}\n'
+ID=$(curl -s -m 20 -X POST $S/api/v1/courier/login -H 'Content-Type: application/json' -d '{"login":"dupc","password":"1234"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
+echo "COURIER ID $ID"
+adb shell pm list packages | grep -i gms | head -3
+echo "== fcm strings in package dump"; adb shell dumpsys package com.yandex.samokat | grep -icE 'firebase|gcm|fcm' || true
+
+dumpui() { adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1; adb pull /sdcard/u.xml out/u.xml >/dev/null 2>&1; python3 - <<'PY'
+import re
+x=open('out/u.xml').read()
+for m in re.finditer(r'<node [^>]*>',x):
+    n=m.group(0)
+    g=lambda k:(re.search(k+'="([^"]*)"',n) or [None,''])[1]
+    print(g('class').split('.')[-1],'|',g('resource-id').split('/')[-1],'|',g('text'),'|',g('content-desc'),'|',g('clickable'),'|',g('bounds'))
+PY
+}
+st() { echo "== $1"; sleep 2; dumpui | grep -v '^\(FrameLayout\|LinearLayout\|ViewGroup\|View\) |  |  |  | false'; python3 snap.py $1; }
+cat > tapt.py <<'PYT'
+import re,sys,subprocess
+subprocess.run(['adb','shell','uiautomator','dump','/sdcard/t.xml'],capture_output=True)
+subprocess.run(['adb','pull','/sdcard/t.xml','/tmp/t.xml'],capture_output=True)
+x=open('/tmp/t.xml').read()
+for m in re.finditer(r'<node [^>]*>',x):
+    n=m.group(0)
+    t=re.search(r' text="([^"]*)"',n).group(1)+'|'+re.search(r'content-desc="([^"]*)"',n).group(1)
+    if sys.argv[1] in t:
+        b=list(map(int,re.findall(r'\d+',re.search(r'bounds="([^"]*)"',n).group(1))))
+        cx,cy=(b[0]+b[2])//2,(b[1]+b[3])//2
+        print('tap',sys.argv[1],cx,cy); subprocess.run(['adb','shell','input','tap',str(cx),str(cy)]); break
+else: print('NOT FOUND',sys.argv[1])
+PYT
+cat > tapid.py <<'PYI'
+import re,sys,subprocess
+subprocess.run(['adb','shell','uiautomator','dump','/sdcard/i.xml'],capture_output=True)
+subprocess.run(['adb','pull','/sdcard/i.xml','/tmp/i.xml'],capture_output=True)
+x=open('/tmp/i.xml').read()
+for m in re.finditer(r'<node [^>]*>',x):
+    n=m.group(0)
+    r=re.search(r'resource-id="([^"]*)"',n)
+    r=r.group(1) if r else ''
+    if sys.argv[1] in r:
+        b=list(map(int,re.findall(r'\d+',re.search(r'bounds="([^"]*)"',n).group(1))))
+        cx,cy=(b[0]+b[2])//2,(b[1]+b[3])//2
+        print('tapid',sys.argv[1],cx,cy); subprocess.run(['adb','shell','input','tap',str(cx),str(cy)]); break
+else: print('ID NOT FOUND',sys.argv[1])
+PYI
+cat > tapout.py <<'PYO'
+import re,subprocess
+subprocess.run(['adb','shell','uiautomator','dump','/sdcard/o.xml'],capture_output=True)
+subprocess.run(['adb','pull','/sdcard/o.xml','/tmp/o.xml'],capture_output=True)
+x=open('/tmp/o.xml').read()
+top=None
+for m in re.finditer(r'<node [^>]*>',x):
+    n=m.group(0)
+    t=re.search(r' text="([^"]*)"',n)
+    t=t.group(1) if t else ''
+    if 'No Internet' in t:
+        b=list(map(int,re.findall(r'\d+',re.search(r'bounds="([^"]*)"',n).group(1))))
+        top=b[1]; break
+if top is None: print('POPUP NOT OPEN')
+else:
+    y=top-250
+    if y<100: y=100
+    print('tap outside at 540',y,'popup top',top); subprocess.run(['adb','shell','input','tap','540',str(y)])
+PYO
+popcheck() { adb shell uiautomator dump /sdcard/p.xml >/dev/null 2>&1; adb pull /sdcard/p.xml out/p.xml >/dev/null 2>&1; if grep -q 'No Internet' out/p.xml; then echo "POPUP VISIBLE: $1"; else echo "POPUP NOT VISIBLE: $1"; fi; }
+echo "== order api"
+curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Ivan","lastName":"Petrov","address":"State St 1214","metroStation":4,"phone":"+78003553535","rentTime":5,"deliveryDate":"2026-11-19","comment":"call me","color":["BLACK"]}' -w ' HTTP %{http_code}\n'
+curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Olga","lastName":"Sidorova","address":"Broadway 55","metroStation":2,"phone":"+78003553536","rentTime":3,"deliveryDate":"2026-11-19","comment":"second door","color":["GREY"]}' -w ' HTTP %{http_code}\n'
+curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Petr","lastName":"Smirnov","address":"Lenina 10","metroStation":7,"phone":"+78003553537","rentTime":2,"deliveryDate":"2026-11-20","comment":"third","color":["BLACK"]}' -w ' HTTP %{http_code}\n'
+adb shell am start -n com.yandex.samokat/com.yandex.scooter.app.ui.main.MainActivity >/dev/null; sleep 8
+st initial_state
+adb shell uiautomator dump /sdcard/g.xml >/dev/null 2>&1; adb pull /sdcard/g.xml out/g.xml >/dev/null 2>&1
+if grep -q 'tab_all' out/g.xml; then echo ALREADY LOGGED IN, logging out; adb shell input tap 984 136; sleep 2; python3 tapt.py Yes; sleep 2; python3 tapt.py Ok; sleep 2; st after_logout; fi
+adb shell input tap 995 2168; sleep 3
+st backend_popup
+cat > tapfield.py <<'PYF'
+import re,subprocess
+subprocess.run(['adb','shell','uiautomator','dump','/sdcard/f.xml'],capture_output=True)
+subprocess.run(['adb','pull','/sdcard/f.xml','/tmp/f.xml'],capture_output=True)
+x=open('/tmp/f.xml').read()
+for m in re.finditer(r'<node [^>]*>',x):
+    n=m.group(0)
+    if 'url_edit' in n:
+        b=list(map(int,re.findall(r'\d+',re.search(r'bounds="([^"]*)"',n).group(1))))
+        cx,cy=(b[0]+b[2])//2,(b[1]+b[3])//2
+        print('tapfield',cx,cy); subprocess.run(['adb','shell','input','tap',str(cx),str(cy)]); break
+PYF
+python3 tapfield.py; sleep 1
+adb shell input text $S; sleep 1
+st backend_typed
 adb shell input keyevent 4; sleep 1
 python3 tapt.py Ok; sleep 2
 st backend_closed
@@ -277,33 +391,91 @@ st popup_after_restore2
 popcheck "after restore + OK + new tap"
 adb shell cmd connectivity airplane-mode disable
 st final_myorders
-echo "== MOB-019 popup persistence"
+prep() {
+  for i in 1 2 3; do
+    adb shell uiautomator dump /sdcard/prep.xml >/dev/null 2>&1
+    adb pull /sdcard/prep.xml out/prep.xml >/dev/null 2>&1
+    if grep -q 'dialog_button_no' out/prep.xml; then
+      echo "PREP: modal dialog detected, dismissing via dialog_button_no (try $i)"
+      python3 tapid.py dialog_button_no; sleep 3
+      continue
+    fi
+    if grep -q 'No Internet' out/prep.xml; then
+      echo "PREP: internet popup open, tapping OK (try $i)"
+      python3 tapt.py "OK"; sleep 2
+      continue
+    fi
+    if grep -q 'tab_all' out/prep.xml; then
+      echo "PREP OK: no modal, tab bar present (try $i)"
+      return 0
+    fi
+    echo "PREP: no modal and no tab bar, waiting (try $i)"; sleep 3
+  done
+  echo "PREP FAIL"
+  return 1
+}
+echo "== MOB-019 exec1 plain persistence"
 adb shell cmd connectivity airplane-mode enable; sleep 4
-python3 tapid.py tab_all; sleep 2
-python3 tapt.py "Accept"; sleep 3
-popcheck "MOB-019 attempt1 t0"
-sleep 10
-popcheck "MOB-019 attempt1 t+10s"
-sleep 10
-popcheck "MOB-019 attempt1 t+20s"
-sleep 10
-popcheck "MOB-019 attempt1 t+30s"
-sleep 15
-popcheck "MOB-019 attempt1 t+45s"
-sleep 15
-popcheck "MOB-019 attempt1 t+60s"
-python3 tapt.py "OK"; sleep 2
-python3 tapt.py "Accept"; sleep 3
-popcheck "MOB-019 attempt2 t0"
-sleep 30
-popcheck "MOB-019 attempt2 t+30s"
-sleep 30
-popcheck "MOB-019 attempt2 t+60s"
-python3 tapt.py "OK"; sleep 2
-python3 tapt.py "Accept"; sleep 3
-popcheck "MOB-019 attempt3 t0"
-sleep 30
-popcheck "MOB-019 attempt3 t+30s"
-sleep 30
-popcheck "MOB-019 attempt3 t+60s"
+prep
+python3 tapt.py "Complete"; sleep 3
+popcheck "MOB-019 exec1 t0"
+if grep -q 'No Internet' out/p.xml; then
+  sleep 5; popcheck "MOB-019 exec1 t+5s"
+  sleep 5; popcheck "MOB-019 exec1 t+10s"
+  sleep 10; popcheck "MOB-019 exec1 t+20s"
+  sleep 10; popcheck "MOB-019 exec1 t+30s"
+else
+  echo "MOB-019 exec1 ABORTED: popup not visible at t0"
+fi
+echo "== MOB-019 exec2 reopen variant"
+prep
+python3 tapt.py "Complete"; sleep 3
+popcheck "MOB-019 exec2 shown"
+if grep -q 'No Internet' out/p.xml; then
+  python3 tapout.py; sleep 2
+  popcheck "MOB-019 exec2 closed by outside tap"
+  python3 tapt.py "Complete"; sleep 3
+  popcheck "MOB-019 exec2 reopened t0"
+  if grep -q 'No Internet' out/p.xml; then
+    sleep 5; popcheck "MOB-019 exec2 t+5s"
+    sleep 5; popcheck "MOB-019 exec2 t+10s"
+    sleep 10; popcheck "MOB-019 exec2 t+20s"
+    sleep 10; popcheck "MOB-019 exec2 t+30s"
+  else
+    echo "MOB-019 exec2 ABORTED: reopen did not show popup"
+  fi
+else
+  echo "MOB-019 exec2 ABORTED: popup not shown initially"
+fi
+echo "== EXTRA-D MOB-020 outside tap on All orders, airplane on"
+prep
+python3 tapid.py tab_all; sleep 3
+popcheck "EXTRA-D popup after tab switch to All orders, airplane on"
+if ! grep -q 'No Internet' out/p.xml; then
+  python3 tapt.py "Accept"; sleep 3
+  popcheck "EXTRA-D popup after Accept tap on All orders, airplane on"
+fi
+if grep -q 'No Internet' out/p.xml; then
+  python3 tapout.py; sleep 2
+  st extra_d_outside
+  popcheck "EXTRA-D after outside tap on All orders, airplane on"
+  python3 tapt.py "OK"; sleep 2
+else
+  echo "EXTRA-D ABORTED: popup not shown on All orders"
+fi
+echo "== EXTRA-E MOB-021 outside tap on My orders, wifi+data off"
 adb shell cmd connectivity airplane-mode disable; sleep 3
+adb shell svc wifi disable; adb shell svc data disable; sleep 4
+prep
+python3 tapid.py tab_mine; sleep 3
+python3 tapt.py "Complete"; sleep 3
+popcheck "EXTRA-E popup shown on My orders, wifi+data off"
+if grep -q 'No Internet' out/p.xml; then
+  python3 tapout.py; sleep 2
+  st extra_e_outside
+  popcheck "EXTRA-E after outside tap on My orders, wifi+data off"
+  python3 tapt.py "OK"; sleep 2
+else
+  echo "EXTRA-E ABORTED: popup not shown on My orders"
+fi
+adb shell svc wifi enable; adb shell svc data enable; sleep 3
