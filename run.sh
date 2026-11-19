@@ -65,7 +65,7 @@ subprocess.run(['adb','pull','/sdcard/f.xml','/tmp/f.xml'],capture_output=True)
 x=open('/tmp/f.xml').read()
 for m in re.finditer(r'<node [^>]*>',x):
     n=m.group(0)
-    if 'EditText' in n:
+    if 'url_edit' in n:
         b=list(map(int,re.findall(r'\d+',re.search(r'bounds="([^"]*)"',n).group(1))))
         cx,cy=(b[0]+b[2])//2,(b[1]+b[3])//2
         print('tapfield',cx,cy); subprocess.run(['adb','shell','input','tap',str(cx),str(cy)]); break
