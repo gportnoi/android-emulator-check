@@ -17,7 +17,7 @@ for i in range(0,len(b),180): print('S:%s:%03d:'%(sys.argv[1],i//180)+b[i:i+180]
 print('SNAPEND')
 PYEOF
 mkdir -p out
-S=https://cnt-5ab62012-3f8b-4727-8e84-58c06a70b6a0.containerhub.tripleten-services.com
+S=https://cnt-c12436df-d3eb-49b6-bdb0-66c467b2e490.containerhub.tripleten-services.com
 adb root; sleep 3
 adb install -r app.apk >/dev/null
 adb shell pm clear com.yandex.samokat
@@ -277,3 +277,33 @@ st popup_after_restore2
 popcheck "after restore + OK + new tap"
 adb shell cmd connectivity airplane-mode disable
 st final_myorders
+echo "== MOB-019 popup persistence"
+adb shell cmd connectivity airplane-mode enable; sleep 4
+python3 tapid.py tab_all; sleep 2
+python3 tapt.py "Accept"; sleep 3
+popcheck "MOB-019 attempt1 t0"
+sleep 10
+popcheck "MOB-019 attempt1 t+10s"
+sleep 10
+popcheck "MOB-019 attempt1 t+20s"
+sleep 10
+popcheck "MOB-019 attempt1 t+30s"
+sleep 15
+popcheck "MOB-019 attempt1 t+45s"
+sleep 15
+popcheck "MOB-019 attempt1 t+60s"
+python3 tapt.py "OK"; sleep 2
+python3 tapt.py "Accept"; sleep 3
+popcheck "MOB-019 attempt2 t0"
+sleep 30
+popcheck "MOB-019 attempt2 t+30s"
+sleep 30
+popcheck "MOB-019 attempt2 t+60s"
+python3 tapt.py "OK"; sleep 2
+python3 tapt.py "Accept"; sleep 3
+popcheck "MOB-019 attempt3 t0"
+sleep 30
+popcheck "MOB-019 attempt3 t+30s"
+sleep 30
+popcheck "MOB-019 attempt3 t+60s"
+adb shell cmd connectivity airplane-mode disable; sleep 3
