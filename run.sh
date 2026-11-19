@@ -30,37 +30,6 @@ adb shell pm list packages | grep -i gms | head -3
 echo "== fcm strings in package dump"; adb shell dumpsys package com.yandex.samokat | grep -icE 'firebase|gcm|fcm' || true
 
 dumpui() { adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1; adb pull /sdcard/u.xml out/u.xml >/dev/null 2>&1; python3 - <<'PY'
-import sys,zlib,struct,base64,subprocess
-raw=subprocess.run(['adb','exec-out','screencap'],capture_output=True).stdout
-w,h=struct.unpack('<II',raw[:8]); off=len(raw)-w*h*4; px=raw[off:]
-f=4; W,H=w//f,h//f
-rows=[]
-for y in range(H):
-    r=bytearray([0]); base=y*f*w*4
-    for x in range(W):
-        i=base+x*f*4; r+=px[i:i+3]
-    rows.append(bytes(r))
-def ch(t,d): c=struct.pack('>I',len(d))+t+d; return c+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
-png=b'\x89PNG\r\n\x1a\n'+ch(b'IHDR',struct.pack('>IIBBBBB',W,H,8,2,0,0,0))+ch(b'IDAT',zlib.compress(b''.join(rows),9))+ch(b'IEND',b'')
-b=base64.b64encode(png).decode()
-print('SNAP',sys.argv[1],len(b))
-for i in range(0,len(b),180): print('S:%s:%03d:'%(sys.argv[1],i//180)+b[i:i+180])
-print('SNAPEND')
-PYEOF
-mkdir -p out
-S=https://cnt-47c8f2c0-4629-4511-baf3-eb5fb318b789.containerhub.tripleten-services.com
-adb root; sleep 3
-adb install -r app.apk >/dev/null
-adb shell pm clear com.yandex.samokat
-adb shell am force-stop com.yandex.samokat
-echo "== server date header"; curl -s -m 20 -D - -o /dev/null $S/api/v1/ping/ | grep -iE '^HTTP|^date'
-echo "== api"; curl -s -m 20 -X POST $S/api/v1/courier -H 'Content-Type: application/json' -d '{"login":"dupc","password":"1234","firstName":"DupC"}' -w ' HTTP %{http_code}\n'
-ID=$(curl -s -m 20 -X POST $S/api/v1/courier/login -H 'Content-Type: application/json' -d '{"login":"dupc","password":"1234"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])')
-echo "COURIER ID $ID"
-adb shell pm list packages | grep -i gms | head -3
-echo "== fcm strings in package dump"; adb shell dumpsys package com.yandex.samokat | grep -icE 'firebase|gcm|fcm' || true
-
-dumpui() { adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1; adb pull /sdcard/u.xml out/u.xml >/dev/null 2>&1; python3 - <<'PY'
 import re
 x=open('out/u.xml').read()
 for m in re.finditer(r'<node [^>]*>',x):
