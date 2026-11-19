@@ -17,7 +17,7 @@ for i in range(0,len(b),180): print('S:%s:%03d:'%(sys.argv[1],i//180)+b[i:i+180]
 print('SNAPEND')
 PYEOF
 mkdir -p out
-S=https://cnt-22dd43ec-87f1-44c8-89b0-a12908839b56.containerhub.tripleten-services.com
+S=https://cnt-bfff2217-6273-47a4-9221-6c23269c7ab8.containerhub.tripleten-services.com
 adb root; sleep 3
 adb install -r app.apk >/dev/null
 adb shell pm clear com.yandex.samokat
