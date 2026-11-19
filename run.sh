@@ -18,11 +18,13 @@ print('SNAPEND')
 PYEOF
 mkdir -p out
 S=https://cnt-22dd43ec-87f1-44c8-89b0-a12908839b56.containerhub.tripleten-services.com
+adb root; sleep 3
 adb install -r app.apk >/dev/null
 adb shell pm clear com.yandex.samokat
+adb shell am force-stop com.yandex.samokat
 echo "== api"; curl -s -m 20 -X POST $S/api/v1/courier -H 'Content-Type: application/json' -d '{"login":"notifqa","password":"1234","firstName":"Notif"}' -w ' HTTP %{http_code}\n'
 curl -s -m 20 -X POST $S/api/v1/courier/login -H 'Content-Type: application/json' -d '{"login":"notifqa","password":"1234"}' -w ' HTTP %{http_code}\n'
-adb shell am start -n com.yandex.samokat/com.yandex.scooter.app.ui.main.MainActivity >/dev/null; sleep 8
+
 dumpui() { adb shell uiautomator dump /sdcard/u.xml >/dev/null 2>&1; adb pull /sdcard/u.xml out/u.xml >/dev/null 2>&1; python3 - <<'PY'
 import re
 x=open('out/u.xml').read()
@@ -51,6 +53,9 @@ echo "== order api"
 curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Ivan","lastName":"Petrov","address":"State St 1214","metroStation":4,"phone":"+78003553535","rentTime":5,"deliveryDate":"2026-11-18","comment":"call me","color":["BLACK"]}' -w ' HTTP %{http_code}\n'
 curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Olga","lastName":"Sidorova","address":"Broadway 55","metroStation":2,"phone":"+78003553536","rentTime":3,"deliveryDate":"2026-11-19","comment":"second door","color":["GREY"]}' -w ' HTTP %{http_code}\n'
 adb shell am start -n com.yandex.samokat/com.yandex.scooter.app.ui.main.MainActivity >/dev/null; sleep 8
+st initial_state
+adb shell uiautomator dump /sdcard/g.xml >/dev/null 2>&1; adb pull /sdcard/g.xml out/g.xml >/dev/null 2>&1
+if grep -q 'tab_all' out/g.xml; then echo ALREADY LOGGED IN, logging out; adb shell input tap 984 136; sleep 2; python3 tapt.py Yes; sleep 2; python3 tapt.py Ok; sleep 2; st after_logout; fi
 adb shell input tap 995 2168; sleep 3
 st backend_popup
 cat > tapfield.py <<'PYF'
