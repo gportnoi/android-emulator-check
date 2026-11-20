@@ -135,49 +135,32 @@ clrfill() { # $1 y of field, $2 text
   adb shell input text "$2"; adb shell input keyevent 4; sleep 1
 }
 dologin() { clrfill 690 dupc; clrfill 880 1234; adb shell input tap 540 1090; sleep 3; }
-echo "== PART B: logout online"
-python3 tapt.py "My orders" >/dev/null; sleep 1
-adb shell input tap 984 136; sleep 2; st logout_dialog
-python3 tapt.py Yes; sleep 3; st after_logout_yes
-echo "== PART C: login online, then Orders screen tests without internet"
+clrfill() { # $1 y of field, $2 text
+  adb shell input tap 500 $1; sleep 1; adb shell input keyevent KEYCODE_MOVE_END
+  for i in $(seq 1 40); do adb shell input keyevent KEYCODE_DEL; done
+  adb shell input text "$2"; adb shell input keyevent 4; sleep 1
+}
+dologin() { clrfill 690 dupc; clrfill 880 1234; adb shell input tap 540 1090; sleep 3; }
+
+echo "== LOGIN online"
 dologin
 for i in $(seq 1 14); do sleep 5; adb shell uiautomator dump /sdcard/c.xml >/dev/null 2>&1; adb pull /sdcard/c.xml out/c.xml >/dev/null 2>&1; if grep -qE 'tab_all' out/c.xml; then echo "LOGIN OK after $((i*5))s"; break; fi; done
-st C0_after_login
+st X0_after_login
+echo "== X1 Accept online, accept dialog shown"
+python3 tapt.py Accept; sleep 3; st X1_dialog_online
 adb shell cmd connectivity airplane-mode enable; sleep 5
 echo "AIRPLANE: $(adb shell settings get global airplane_mode_on)"
-echo "== O1 All orders tab, no internet"
-python3 tapid.py tab_all; sleep 3; st O1_all_orders; popcheck "O1"
+echo "== X2 tap No on the accept dialog with no internet"
+python3 tapt.py "No"; sleep 3; st X2_after_no_offline; popcheck "X2"
 python3 tapt.py "OK"; sleep 2
-echo "== O2 My orders tab, no internet"
-python3 tapid.py tab_mine; sleep 3; st O2_my_orders; popcheck "O2"
-python3 tapt.py "OK"; sleep 2
-echo "== O6 Accept on All orders, no internet"
-python3 tapid.py tab_all; sleep 3; python3 tapt.py "OK"; sleep 1
-python3 tapt.py Accept; sleep 3; st O6_accept_dialog; popcheck "O6"
-echo "== O8 No on the accept dialog"
-python3 tapt.py "No"; sleep 3; st O8_after_no; popcheck "O8"
-echo "== O6b Accept again, O7 Yes on the accept dialog"
-python3 tapt.py Accept; sleep 3
-python3 tapt.py Yes; sleep 4; st O7_after_yes; popcheck "O7"
-python3 tapt.py "OK"; sleep 2
-echo "== O3 logout button, no internet"
-adb shell input tap 984 136; sleep 3; st O3_logout_dialog; popcheck "O3"
-echo "== O4 No on logout dialog"
-python3 tapt.py "No"; sleep 3; st O4_after_no
-echo "== O5 logout again, Yes"
-adb shell input tap 984 136; sleep 3
-python3 tapt.py Yes; sleep 4; st O5_after_yes; popcheck "O5"
-echo "== PART D: online again, login, clock 21:56 on 2026-11-19, accept, logout"
 adb shell cmd connectivity airplane-mode disable; sleep 6
-st D00_before_login
-dologin
-for i in $(seq 1 14); do sleep 5; adb shell uiautomator dump /sdcard/c.xml >/dev/null 2>&1; adb pull /sdcard/c.xml out/c.xml >/dev/null 2>&1; if grep -qE 'tab_all' out/c.xml; then echo "LOGIN OK after $((i*5))s"; break; fi; done
-st D0_after_login
-adb root; sleep 3
-adb shell settings put global auto_time 0; adb shell settings put global auto_time_zone 0
-adb shell date 111921562026.30; sleep 2; adb shell date
-python3 tapt.py Accept; sleep 2; python3 tapt.py Yes; sleep 4
-st D1_after_accept
-adb shell input tap 984 136; sleep 3; st D2_logout_dialog
-python3 tapt.py Yes; sleep 5; st D3_after_logout_yes
+echo "== X3 Accept online again, then lose internet, tap Yes"
+python3 tapt.py Accept; sleep 3; st X3_dialog_online_again
+adb shell cmd connectivity airplane-mode enable; sleep 5
+python3 tapt.py Yes; sleep 4; st X4_after_yes_offline; popcheck "X4"
+python3 tapt.py "OK"; sleep 2
+adb shell cmd connectivity airplane-mode disable; sleep 8
+echo "== X5 state after internet is back"
+python3 tapid.py tab_mine; sleep 3; st X5_my_orders
+python3 tapid.py tab_all; sleep 3; st X6_all_orders
 echo "== DONE"
