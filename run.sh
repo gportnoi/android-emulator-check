@@ -142,6 +142,10 @@ clrfill() { # $1 y of field, $2 text
 }
 dologin() { clrfill 690 dupc; clrfill 880 1234; adb shell input tap 540 1090; sleep 3; }
 
+echo "== PART B: logout online"
+python3 tapt.py "My orders" >/dev/null; sleep 1
+adb shell input tap 984 136; sleep 2; st logout_dialog
+python3 tapt.py Yes; sleep 3; st after_logout_yes
 echo "== LOGIN online"
 dologin
 for i in $(seq 1 14); do sleep 5; adb shell uiautomator dump /sdcard/c.xml >/dev/null 2>&1; adb pull /sdcard/c.xml out/c.xml >/dev/null 2>&1; if grep -qE 'tab_all' out/c.xml; then echo "LOGIN OK after $((i*5))s"; break; fi; done
