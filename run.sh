@@ -17,7 +17,7 @@ for i in range(0,len(b),180): print('S:%s:%03d:'%(sys.argv[1],i//180)+b[i:i+180]
 print('SNAPEND')
 PYEOF
 mkdir -p out
-S=https://cnt-47c8f2c0-4629-4511-baf3-eb5fb318b789.containerhub.tripleten-services.com
+S=https://cnt-ddb16bbd-433c-4e89-8084-d0f430c83609.containerhub.tripleten-services.com
 adb root; sleep 3
 adb install -r app.apk >/dev/null
 adb shell pm clear com.yandex.samokat
@@ -123,16 +123,18 @@ st after_login_tap
 for i in $(seq 1 14); do sleep 5; adb shell uiautomator dump /sdcard/c.xml >/dev/null 2>&1; adb pull /sdcard/c.xml out/c.xml >/dev/null 2>&1; if grep -qE 'tab_all|swipe_refresh_container|no_order' out/c.xml; then echo "LOGIN OK after $((i*5))s"; break; fi; done
 grep -qE 'tab_all|swipe_refresh_container|no_order' out/c.xml && echo LOGIN CONFIRMED || echo LOGIN FAILED
 echo "== tab bar nodes"; grep -o 'resource-id="[^"]*tab[^"]*"[^>]*' out/c.xml | head -8
-echo "== set device clock BEFORE accepting orders"
+
+st() { echo "== $1"; sleep 2; dumpui | grep -v '^\(FrameLayout\|LinearLayout\|ViewGroup\|View\) |  |  |  | false'; }
+curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Anna","lastName":"Volkova","address":"Pine St 7","metroStation":3,"phone":"+78003553538","rentTime":4,"deliveryDate":"2026-11-20","comment":"d","color":["GREY"]}' -w ' HTTP %{http_code}\n'
+curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Igor","lastName":"Kuznetsov","address":"Oak Ave 3","metroStation":5,"phone":"+78003553539","rentTime":6,"deliveryDate":"2026-11-20","comment":"e","color":["BLACK"]}' -w ' HTTP %{http_code}\n'
+
+echo "== PART A: set clock 21:56:30 on 2026-11-19 and accept orders"
 adb root; sleep 3
 adb shell settings put global auto_time 0; adb shell settings put global auto_time_zone 0
-adb shell date 111921462026.00; sleep 2; adb shell date
+adb shell date 111921562026.30; sleep 2; adb shell date
 adb shell am start -n com.yandex.samokat/com.yandex.scooter.app.ui.main.MainActivity >/dev/null; sleep 6
-st all_orders
 python3 tapt.py Accept; sleep 2
-st accept_dialog
 python3 tapt.py Yes; sleep 4
-st after_accept
 adb shell input swipe 540 700 540 1900 500; sleep 3
 cat > accept_b.py <<'PYB'
 import re,subprocess
@@ -157,211 +159,98 @@ else: print('ACCEPT-B NOT FOUND', ay, len(btns))
 PYB
 python3 accept_b.py; sleep 2
 python3 tapt.py Yes; sleep 4
-echo "== accept dialog for layout (order C, will cancel with No)"
-python3 tapt.py Accept; sleep 2
-st accept_dialog_c
-python3 tapt.py "No"; sleep 3
-echo "== alarms right after accepts (clock already 21:4x)"
-adb shell date; adb shell dumpsys alarm | grep -iB2 -A6 yandex | head -40
-adb shell dumpsys jobscheduler | grep -iB2 -A6 yandex | head -40
+echo "CLOCK AFTER ACCEPTS: $(adb shell date)"
 python3 tapt.py "My orders"; sleep 3
-st my_orders_dup
-adb shell uiautomator dump /sdcard/m.xml >/dev/null 2>&1; adb pull /sdcard/m.xml out/m.xml >/dev/null 2>&1
-grep -q 'Broadway 55' out/m.xml && echo ORDER B IN MY ORDERS || echo ORDER B MISSING
-grep -q 'State St 1214' out/m.xml && echo ORDER A IN MY ORDERS || echo ORDER A MISSING
-grep -o 'Complete' out/m.xml | wc -l | sed "s/^/COMPLETE COUNT /"
-echo "== API orders for courier $ID"
-curl -s -m 20 "$S/api/v1/orders?courierId=$ID&limit=30" > out/orders.json; head -c 1500 out/orders.json; echo
-python3 - <<'PY'
-import json
-d=json.load(open('out/orders.json'))
-os=d.get('orders',[])
-mine=[o for o in os if o.get('courierId') is not None]
-print('ORDERS WITH COURIER ASSIGNED:',len(mine))
-print('DISTINCT IDS:',sorted(set(o['id'] for o in mine)))
-print('STATUSES:',[(o['id'],o.get('status')) for o in mine])
-PY
-echo "== foreground notification wait: crossing 21:59 naturally, clock set before accept"
-for i in $(seq 1 44); do sleep 25; T=$(adb shell date +%H:%M:%S); N=$(adb shell dumpsys notification --noredact | grep -c 'pkg=com.yandex.samokat'); echo "POLL $T yandex_notif_records=$N"; adb shell dumpsys notification --noredact | grep -iE 'tickerText|android.title|android.text' | grep -viE 'Serial|bootloader' | head -4; if [ "$N" -gt 0 ]; then echo NOTIFICATION DETECTED; break; fi; done
-echo "== notifdump final"; adb shell dumpsys notification --noredact | grep -iE 'NotificationRecord|pkg=com.yandex|tickerText|android.title|android.text' | head -40
+st my_orders_before_wait
+echo "== PART A2: poll notifications from now until 22:01:30 (orders deliver 2026-11-19, notification expected 21:59)"
+for i in $(seq 1 60); do
+  T=$(adb shell date +%H:%M:%S | tr -d '\r')
+  N=$(adb shell dumpsys notification --noredact | grep -c 'pkg=com.yandex.samokat')
+  echo "NOTIFPOLL $T yandex_notification_records=$N"
+  if [ "$T" \> "22:01:30" ]; then break; fi
+  sleep 8
+done
+echo "== notification dump after wait"; adb shell dumpsys notification --noredact | grep -iE 'pkg=com.yandex|tickerText|android.title|android.text' | head -20
 adb shell cmd statusbar expand-notifications; sleep 3
-st shade2
-adb shell input keyevent 4; sleep 2
-echo "== persistence: switch to Available tab and back"
-python3 tapid.py tab_all; sleep 3
-st all_orders_again
-python3 tapt.py "My orders"; sleep 3
-adb shell uiautomator dump /sdcard/m2.xml >/dev/null 2>&1; adb pull /sdcard/m2.xml out/m2.xml >/dev/null 2>&1
-grep -o 'Complete' out/m2.xml | wc -l | sed "s/^/COMPLETE COUNT AFTER TAB SWITCH /"
-echo "== persistence: force-stop and restart app"
-adb shell am force-stop com.yandex.samokat; sleep 2
-adb shell am start -n com.yandex.samokat/com.yandex.scooter.app.ui.main.MainActivity >/dev/null; sleep 8
-python3 tapt.py "My orders"; sleep 3
-st my_orders_after_restart
-adb shell uiautomator dump /sdcard/m3.xml >/dev/null 2>&1; adb pull /sdcard/m3.xml out/m3.xml >/dev/null 2>&1
-grep -o 'Complete' out/m3.xml | wc -l | sed "s/^/COMPLETE COUNT AFTER RESTART /"
-echo "== complete one duplicated card"
-python3 tapt.py "Complete"; sleep 3
-st complete_dialog
-python3 tapt.py Yes; sleep 4
-st my_orders_after_complete
-adb shell uiautomator dump /sdcard/m4.xml >/dev/null 2>&1; adb pull /sdcard/m4.xml out/m4.xml >/dev/null 2>&1
-grep -o 'Complete' out/m4.xml | wc -l | sed "s/^/COMPLETE COUNT AFTER COMPLETE /"
-curl -s -m 20 "$S/api/v1/orders?courierId=$ID&limit=30" > out/orders2.json
-python3 - <<'PY'
-import json
-d=json.load(open('out/orders2.json'))
-os=[o for o in d.get('orders',[]) if o.get('courierId') is not None]
-print('AFTER COMPLETE - STATUSES:',[(o['id'],o.get('status')) for o in os])
-PY
-cat > tapcard.py <<'PYC'
-import re,subprocess
-subprocess.run(['adb','shell','uiautomator','dump','/sdcard/card.xml'],capture_output=True)
-subprocess.run(['adb','pull','/sdcard/card.xml','/tmp/card.xml'],capture_output=True)
-x=open('/tmp/card.xml').read()
-best=None
-for m in re.finditer(r'<node [^>]*>',x):
-    n=m.group(0)
-    rid=re.search(r'resource-id="([^"]*)"',n)
-    if rid and 'card' in rid.group(1).lower():
-        b=list(map(int,re.findall(r'\d+',re.search(r'bounds="([^"]*)"',n).group(1))))
-        cx=(b[0]+b[2])//2; cy=b[1]+(b[3]-b[1])//5
-        best=(cx,cy,rid.group(1)); break
-if best:
-    print('tapcard',best); subprocess.run(['adb','shell','input','tap',str(best[0]),str(best[1])])
-else:
-    print('tapcard NO CARD NODE FOUND')
-PYC
-echo "== EXTRA-C online card tap"
-python3 tapcard.py; sleep 3
-st extra_c_online
-adb shell uiautomator dump /sdcard/ec.xml >/dev/null 2>&1; adb pull /sdcard/ec.xml out/ec.xml >/dev/null 2>&1
-grep -q 'tab_all' out/ec.xml && echo "EXTRA-C ONLINE RESULT: still on main tabs after card tap" || echo "EXTRA-C ONLINE RESULT: left main screen after card tap (detail opened?)"
-grep -q 'tab_all' out/ec.xml || { adb shell input keyevent 4; sleep 2; }
-echo "== offline tests"
-adb shell cmd connectivity airplane-mode enable; sleep 4
-python3 tapid.py tab_all; sleep 3
-st offline_available
-python3 tapt.py "Accept"; sleep 3
-st popup_available
-popcheck "after Accept tap on Available screen, airplane on"
-adb shell input keyevent 4; sleep 2
-st popup_back_once
-popcheck "after single Back press with popup open"
-python3 tapt.py "Accept"; sleep 3
-popcheck "retriggered on Available after Back"
-python3 tapt.py "My orders"; sleep 3
-python3 tapt.py "Complete"; sleep 3
-st popup_myorders
-popcheck "after Complete tap on My orders, airplane on"
+st shade_after_wait
+adb shell cmd statusbar collapse; sleep 1
+echo "== PART B: logout online, then Login screen without internet"
+python3 tapt.py "My orders" >/dev/null; sleep 1
+adb shell input tap 984 136; sleep 2; st logout_dialog
+python3 tapt.py Yes; sleep 3; st after_logout_yes
+python3 tapt.py Ok; sleep 2
+st login_screen_online
+adb shell cmd connectivity airplane-mode enable; sleep 5
+echo "AIRPLANE: $(adb shell settings get global airplane_mode_on)"
+echo "== L1 tap Login with empty login and password, no internet"
+adb shell input tap 540 1090; sleep 3
+st L1_after_login_empty
+popcheck "L1"
+echo "== L2 tap OK on the pop-up if one is shown"
 python3 tapt.py "OK"; sleep 2
-popcheck "after OK on My orders popup"
-python3 tapt.py "Complete"; sleep 3
-popcheck "retriggered before outside tap"
-python3 tapout.py; sleep 2
-st popup_outside2
-popcheck "after tap outside popup"
-python3 tapt.py "Complete"; sleep 3
-popcheck "retriggered before net restore"
+python3 tapt.py "Ok"; sleep 2
+st L2_after_ok
+echo "== L2b enter a login and password, tap Login, no internet"
+adb shell input tap 500 690; sleep 1; adb shell input text dupc; adb shell input keyevent 4; sleep 1
+adb shell input tap 500 880; sleep 1; adb shell input text 1234; adb shell input keyevent 4; sleep 1
+adb shell input tap 540 1090; sleep 3
+st L2b_after_login_filled
+popcheck "L2b"
+python3 tapt.py "OK"; sleep 2; python3 tapt.py "Ok"; sleep 2
+echo "== L3 tap the question mark button"
+adb shell input tap 995 2168; sleep 3
+st L3_question_mark
+echo "== L4 type API URL then tap OK"
+python3 tapfield.py; sleep 1
+adb shell input text $S; sleep 1
+adb shell input keyevent 4; sleep 1
+python3 tapt.py "OK"; sleep 2; python3 tapt.py "Ok"; sleep 2
+st L4_after_ok_with_url
+echo "== L5 open again, clear API URL, tap OK"
+adb shell input tap 995 2168; sleep 3
+st L5_popup_reopened
+python3 tapfield.py; sleep 1
+adb shell input keyevent KEYCODE_MOVE_END
+for i in $(seq 1 120); do adb shell input keyevent KEYCODE_DEL; done
+sleep 1; st L5_url_cleared
+adb shell input keyevent 4; sleep 1
+python3 tapt.py "OK"; sleep 2; python3 tapt.py "Ok"; sleep 2
+st L5_after_ok_without_url
+echo "== PART C: login online again for Orders screen tests"
+adb shell cmd connectivity airplane-mode disable; sleep 6
+adb shell input tap 995 2168; sleep 3
+python3 tapfield.py; sleep 1
+adb shell input text $S; sleep 1
+adb shell input keyevent 4; sleep 1
+python3 tapt.py "OK"; sleep 2; python3 tapt.py "Ok"; sleep 2
+adb shell input tap 500 690; sleep 1; adb shell input text dupc; adb shell input keyevent 4; sleep 1
+adb shell input tap 500 880; sleep 1; adb shell input text 1234; adb shell input keyevent 4; sleep 1
+adb shell input tap 540 1090; sleep 3
+for i in $(seq 1 14); do sleep 5; adb shell uiautomator dump /sdcard/c.xml >/dev/null 2>&1; adb pull /sdcard/c.xml out/c.xml >/dev/null 2>&1; if grep -qE 'tab_all|swipe_refresh_container|no_order' out/c.xml; then echo "LOGIN OK after $((i*5))s"; break; fi; done
+grep -qE 'tab_all' out/c.xml && echo LOGIN2 CONFIRMED || echo LOGIN2 FAILED
+adb shell cmd connectivity airplane-mode enable; sleep 5
+echo "AIRPLANE: $(adb shell settings get global airplane_mode_on)"
+echo "== O1 All orders tab, no internet"
+python3 tapid.py tab_all; sleep 3; st O1_all_orders; popcheck "O1"
 python3 tapt.py "OK"; sleep 2
-echo "== EXTRA-C offline card tap"
-python3 tapcard.py; sleep 3
-st extra_c_offline
-popcheck "EXTRA-C after order card tap, airplane on"
-adb shell cmd connectivity airplane-mode disable; sleep 5
-st popup_still_open_on_net
-popcheck "after internet restored with popup open"
+echo "== O2 My orders tab, no internet"
+python3 tapid.py tab_mine; sleep 3; st O2_my_orders; popcheck "O2"
 python3 tapt.py "OK"; sleep 2
-python3 tapt.py "Complete"; sleep 3
-st popup_after_restore2
-popcheck "after restore + OK + new tap"
+echo "== O6 Accept on All orders, no internet"
+python3 tapid.py tab_all; sleep 3; python3 tapt.py "OK"; sleep 1
+python3 tapt.py Accept; sleep 3; st O6_accept_dialog; popcheck "O6"
+echo "== O8 No on the accept dialog"
+python3 tapt.py "No"; sleep 3; st O8_after_no; popcheck "O8"
+echo "== O6b Accept again, O7 Yes on the accept dialog"
+python3 tapt.py Accept; sleep 3
+python3 tapt.py Yes; sleep 4; st O7_after_yes; popcheck "O7"
+python3 tapt.py "OK"; sleep 2; python3 tapt.py "Ok"; sleep 2
+echo "== O3 logout button, no internet"
+adb shell input tap 984 136; sleep 3; st O3_logout_dialog; popcheck "O3"
+echo "== O4 No on logout dialog"
+python3 tapt.py "No"; sleep 3; st O4_after_no
+echo "== O5 logout again, Yes"
+adb shell input tap 984 136; sleep 3
+python3 tapt.py Yes; sleep 4; st O5_after_yes; popcheck "O5"
 adb shell cmd connectivity airplane-mode disable
-st final_myorders
-prep() {
-  for i in 1 2 3; do
-    adb shell uiautomator dump /sdcard/prep.xml >/dev/null 2>&1
-    adb pull /sdcard/prep.xml out/prep.xml >/dev/null 2>&1
-    if grep -q 'dialog_button_no' out/prep.xml; then
-      echo "PREP: modal dialog detected, dismissing via dialog_button_no (try $i)"
-      python3 tapid.py dialog_button_no; sleep 3
-      continue
-    fi
-    if grep -q 'No Internet' out/prep.xml; then
-      echo "PREP: internet popup open, tapping OK (try $i)"
-      python3 tapt.py "OK"; sleep 2
-      continue
-    fi
-    if grep -q 'tab_all' out/prep.xml; then
-      echo "PREP OK: no modal, tab bar present (try $i)"
-      return 0
-    fi
-    echo "PREP: no modal and no tab bar, waiting (try $i)"; sleep 3
-  done
-  echo "PREP FAIL"
-  return 1
-}
-echo "== MOB-019 exec1 plain persistence"
-adb shell cmd connectivity airplane-mode enable; sleep 4
-prep
-python3 tapt.py "Complete"; sleep 3
-popcheck "MOB-019 exec1 t0"
-if grep -q 'No Internet' out/p.xml; then
-  sleep 5; popcheck "MOB-019 exec1 t+5s"
-  sleep 5; popcheck "MOB-019 exec1 t+10s"
-  sleep 10; popcheck "MOB-019 exec1 t+20s"
-  sleep 10; popcheck "MOB-019 exec1 t+30s"
-else
-  echo "MOB-019 exec1 ABORTED: popup not visible at t0"
-fi
-echo "== MOB-019 exec2 reopen variant"
-prep
-python3 tapt.py "Complete"; sleep 3
-popcheck "MOB-019 exec2 shown"
-if grep -q 'No Internet' out/p.xml; then
-  python3 tapout.py; sleep 2
-  popcheck "MOB-019 exec2 closed by outside tap"
-  python3 tapt.py "Complete"; sleep 3
-  popcheck "MOB-019 exec2 reopened t0"
-  if grep -q 'No Internet' out/p.xml; then
-    sleep 5; popcheck "MOB-019 exec2 t+5s"
-    sleep 5; popcheck "MOB-019 exec2 t+10s"
-    sleep 10; popcheck "MOB-019 exec2 t+20s"
-    sleep 10; popcheck "MOB-019 exec2 t+30s"
-  else
-    echo "MOB-019 exec2 ABORTED: reopen did not show popup"
-  fi
-else
-  echo "MOB-019 exec2 ABORTED: popup not shown initially"
-fi
-echo "== EXTRA-D MOB-020 outside tap on All orders, airplane on"
-prep
-python3 tapid.py tab_all; sleep 3
-popcheck "EXTRA-D popup after tab switch to All orders, airplane on"
-if ! grep -q 'No Internet' out/p.xml; then
-  python3 tapt.py "Accept"; sleep 3
-  popcheck "EXTRA-D popup after Accept tap on All orders, airplane on"
-fi
-if grep -q 'No Internet' out/p.xml; then
-  python3 tapout.py; sleep 2
-  st extra_d_outside
-  popcheck "EXTRA-D after outside tap on All orders, airplane on"
-  python3 tapt.py "OK"; sleep 2
-else
-  echo "EXTRA-D ABORTED: popup not shown on All orders"
-fi
-echo "== EXTRA-E MOB-021 outside tap on My orders, wifi+data off"
-adb shell cmd connectivity airplane-mode disable; sleep 3
-adb shell svc wifi disable; adb shell svc data disable; sleep 4
-prep
-python3 tapid.py tab_mine; sleep 3
-python3 tapt.py "Complete"; sleep 3
-popcheck "EXTRA-E popup shown on My orders, wifi+data off"
-if grep -q 'No Internet' out/p.xml; then
-  python3 tapout.py; sleep 2
-  st extra_e_outside
-  popcheck "EXTRA-E after outside tap on My orders, wifi+data off"
-  python3 tapt.py "OK"; sleep 2
-else
-  echo "EXTRA-E ABORTED: popup not shown on My orders"
-fi
-adb shell svc wifi enable; adb shell svc data enable; sleep 3
+echo "== DONE"
