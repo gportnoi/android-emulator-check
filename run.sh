@@ -128,52 +128,6 @@ st() { echo "== $1"; sleep 2; dumpui | grep -v '^\(FrameLayout\|LinearLayout\|Vi
 curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Anna","lastName":"Volkova","address":"Pine St 7","metroStation":3,"phone":"+78003553538","rentTime":4,"deliveryDate":"2026-11-20","comment":"d","color":["GREY"]}' -w ' HTTP %{http_code}\n'
 curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Igor","lastName":"Kuznetsov","address":"Oak Ave 3","metroStation":5,"phone":"+78003553539","rentTime":6,"deliveryDate":"2026-11-20","comment":"e","color":["BLACK"]}' -w ' HTTP %{http_code}\n'
 
-echo "== PART A: set clock 21:56:30 on 2026-11-19 and accept orders"
-adb root; sleep 3
-adb shell settings put global auto_time 0; adb shell settings put global auto_time_zone 0
-adb shell date 111921562026.30; sleep 2; adb shell date
-adb shell am start -n com.yandex.samokat/com.yandex.scooter.app.ui.main.MainActivity >/dev/null; sleep 6
-python3 tapt.py Accept; sleep 2
-python3 tapt.py Yes; sleep 4
-adb shell input swipe 540 700 540 1900 500; sleep 3
-cat > accept_b.py <<'PYB'
-import re,subprocess
-subprocess.run(['adb','shell','uiautomator','dump','/sdcard/b.xml'],capture_output=True)
-subprocess.run(['adb','pull','/sdcard/b.xml','/tmp/b.xml'],capture_output=True)
-x=open('/tmp/b.xml').read()
-ay=None; btns=[]
-for m in re.finditer(r'<node [^>]*>',x):
-    n=m.group(0)
-    t=re.search(r' text="([^"]*)"',n)
-    t=t.group(1) if t else ''
-    b=re.search(r'bounds="([^"]*)"',n)
-    if not b: continue
-    bb=list(map(int,re.findall(r'\d+',b.group(1))))
-    cy=(bb[1]+bb[3])//2; cx=(bb[0]+bb[2])//2
-    if t=='Broadway 55': ay=cy
-    if t=='Accept': btns.append((cx,cy))
-if ay is not None and btns:
-    btns.sort(key=lambda p:abs(p[1]-ay))
-    print('tap Accept-B',btns[0]); subprocess.run(['adb','shell','input','tap',str(btns[0][0]),str(btns[0][1])])
-else: print('ACCEPT-B NOT FOUND', ay, len(btns))
-PYB
-python3 accept_b.py; sleep 2
-python3 tapt.py Yes; sleep 4
-echo "CLOCK AFTER ACCEPTS: $(adb shell date)"
-python3 tapt.py "My orders"; sleep 3
-st my_orders_before_wait
-echo "== PART A2: poll notifications from now until 22:01:30 (orders deliver 2026-11-19, notification expected 21:59)"
-for i in $(seq 1 60); do
-  T=$(adb shell date +%H:%M:%S | tr -d '\r')
-  N=$(adb shell dumpsys notification --noredact | grep -c 'pkg=com.yandex.samokat')
-  echo "NOTIFPOLL $T yandex_notification_records=$N"
-  if [ "$T" \> "22:01:30" ]; then break; fi
-  sleep 8
-done
-echo "== notification dump after wait"; adb shell dumpsys notification --noredact | grep -iE 'pkg=com.yandex|tickerText|android.title|android.text' | head -20
-adb shell cmd statusbar expand-notifications; sleep 3
-st shade_after_wait
-adb shell cmd statusbar collapse; sleep 1
 echo "== PART B: logout online, then Login screen without internet"
 python3 tapt.py "My orders" >/dev/null; sleep 1
 adb shell input tap 984 136; sleep 2; st logout_dialog
@@ -253,4 +207,24 @@ echo "== O5 logout again, Yes"
 adb shell input tap 984 136; sleep 3
 python3 tapt.py Yes; sleep 4; st O5_after_yes; popcheck "O5"
 adb shell cmd connectivity airplane-mode disable
+
+echo "== PART D: login online again, set clock to 21:56 on 2026-11-19, accept an order, then logout Yes"
+adb shell cmd connectivity airplane-mode disable; sleep 6
+python3 tapt.py "OK" >/dev/null
+adb shell input tap 995 2168; sleep 3
+python3 tapfield.py; sleep 1
+adb shell input text $S; sleep 1
+adb shell input keyevent 4; sleep 1
+python3 tapt.py "OK"; sleep 2
+adb shell input tap 500 690; sleep 1; adb shell input text dupc; adb shell input keyevent 4; sleep 1
+adb shell input tap 500 880; sleep 1; adb shell input text 1234; adb shell input keyevent 4; sleep 1
+adb shell input tap 540 1090; sleep 10
+st D0_after_login
+adb root; sleep 3
+adb shell settings put global auto_time 0; adb shell settings put global auto_time_zone 0
+adb shell date 111921562026.30; sleep 2; adb shell date
+python3 tapt.py Accept; sleep 2; python3 tapt.py Yes; sleep 4
+st D1_after_accept
+adb shell input tap 984 136; sleep 3; st D2_logout_dialog
+python3 tapt.py Yes; sleep 5; st D3_after_logout_yes
 echo "== DONE"
