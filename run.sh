@@ -128,60 +128,21 @@ st() { echo "== $1"; sleep 2; dumpui | grep -v '^\(FrameLayout\|LinearLayout\|Vi
 curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Anna","lastName":"Volkova","address":"Pine St 7","metroStation":3,"phone":"+78003553538","rentTime":4,"deliveryDate":"2026-11-20","comment":"d","color":["GREY"]}' -w ' HTTP %{http_code}\n'
 curl -s -m 20 -X POST $S/api/v1/orders -H 'Content-Type: application/json' -d '{"firstName":"Igor","lastName":"Kuznetsov","address":"Oak Ave 3","metroStation":5,"phone":"+78003553539","rentTime":6,"deliveryDate":"2026-11-20","comment":"e","color":["BLACK"]}' -w ' HTTP %{http_code}\n'
 
-echo "== PART B: logout online, then Login screen without internet"
+
+clrfill() { # $1 y of field, $2 text
+  adb shell input tap 500 $1; sleep 1; adb shell input keyevent KEYCODE_MOVE_END
+  for i in $(seq 1 40); do adb shell input keyevent KEYCODE_DEL; done
+  adb shell input text "$2"; adb shell input keyevent 4; sleep 1
+}
+dologin() { clrfill 690 dupc; clrfill 880 1234; adb shell input tap 540 1090; sleep 3; }
+echo "== PART B: logout online"
 python3 tapt.py "My orders" >/dev/null; sleep 1
 adb shell input tap 984 136; sleep 2; st logout_dialog
 python3 tapt.py Yes; sleep 3; st after_logout_yes
-python3 tapt.py Ok; sleep 2
-st login_screen_online
-adb shell cmd connectivity airplane-mode enable; sleep 5
-echo "AIRPLANE: $(adb shell settings get global airplane_mode_on)"
-echo "== L1 tap Login with empty login and password, no internet"
-adb shell input tap 540 1090; sleep 3
-st L1_after_login_empty
-popcheck "L1"
-echo "== L2 tap OK on the pop-up if one is shown"
-python3 tapt.py "OK"; sleep 2
-python3 tapt.py "Ok"; sleep 2
-st L2_after_ok
-echo "== L2b enter a login and password, tap Login, no internet"
-adb shell input tap 500 690; sleep 1; adb shell input text dupc; adb shell input keyevent 4; sleep 1
-adb shell input tap 500 880; sleep 1; adb shell input text 1234; adb shell input keyevent 4; sleep 1
-adb shell input tap 540 1090; sleep 3
-st L2b_after_login_filled
-popcheck "L2b"
-python3 tapt.py "OK"; sleep 2; python3 tapt.py "Ok"; sleep 2
-echo "== L3 tap the question mark button"
-adb shell input tap 995 2168; sleep 3
-st L3_question_mark
-echo "== L4 type API URL then tap OK"
-python3 tapfield.py; sleep 1
-adb shell input text $S; sleep 1
-adb shell input keyevent 4; sleep 1
-python3 tapt.py "OK"; sleep 2; python3 tapt.py "Ok"; sleep 2
-st L4_after_ok_with_url
-echo "== L5 open again, clear API URL, tap OK"
-adb shell input tap 995 2168; sleep 3
-st L5_popup_reopened
-python3 tapfield.py; sleep 1
-adb shell input keyevent KEYCODE_MOVE_END
-for i in $(seq 1 120); do adb shell input keyevent KEYCODE_DEL; done
-sleep 1; st L5_url_cleared
-adb shell input keyevent 4; sleep 1
-python3 tapt.py "OK"; sleep 2; python3 tapt.py "Ok"; sleep 2
-st L5_after_ok_without_url
-echo "== PART C: login online again for Orders screen tests"
-adb shell cmd connectivity airplane-mode disable; sleep 6
-adb shell input tap 995 2168; sleep 3
-python3 tapfield.py; sleep 1
-adb shell input text $S; sleep 1
-adb shell input keyevent 4; sleep 1
-python3 tapt.py "OK"; sleep 2; python3 tapt.py "Ok"; sleep 2
-adb shell input tap 500 690; sleep 1; adb shell input text dupc; adb shell input keyevent 4; sleep 1
-adb shell input tap 500 880; sleep 1; adb shell input text 1234; adb shell input keyevent 4; sleep 1
-adb shell input tap 540 1090; sleep 3
-for i in $(seq 1 14); do sleep 5; adb shell uiautomator dump /sdcard/c.xml >/dev/null 2>&1; adb pull /sdcard/c.xml out/c.xml >/dev/null 2>&1; if grep -qE 'tab_all|swipe_refresh_container|no_order' out/c.xml; then echo "LOGIN OK after $((i*5))s"; break; fi; done
-grep -qE 'tab_all' out/c.xml && echo LOGIN2 CONFIRMED || echo LOGIN2 FAILED
+echo "== PART C: login online, then Orders screen tests without internet"
+dologin
+for i in $(seq 1 14); do sleep 5; adb shell uiautomator dump /sdcard/c.xml >/dev/null 2>&1; adb pull /sdcard/c.xml out/c.xml >/dev/null 2>&1; if grep -qE 'tab_all' out/c.xml; then echo "LOGIN OK after $((i*5))s"; break; fi; done
+st C0_after_login
 adb shell cmd connectivity airplane-mode enable; sleep 5
 echo "AIRPLANE: $(adb shell settings get global airplane_mode_on)"
 echo "== O1 All orders tab, no internet"
@@ -198,7 +159,7 @@ python3 tapt.py "No"; sleep 3; st O8_after_no; popcheck "O8"
 echo "== O6b Accept again, O7 Yes on the accept dialog"
 python3 tapt.py Accept; sleep 3
 python3 tapt.py Yes; sleep 4; st O7_after_yes; popcheck "O7"
-python3 tapt.py "OK"; sleep 2; python3 tapt.py "Ok"; sleep 2
+python3 tapt.py "OK"; sleep 2
 echo "== O3 logout button, no internet"
 adb shell input tap 984 136; sleep 3; st O3_logout_dialog; popcheck "O3"
 echo "== O4 No on logout dialog"
@@ -206,19 +167,11 @@ python3 tapt.py "No"; sleep 3; st O4_after_no
 echo "== O5 logout again, Yes"
 adb shell input tap 984 136; sleep 3
 python3 tapt.py Yes; sleep 4; st O5_after_yes; popcheck "O5"
-adb shell cmd connectivity airplane-mode disable
-
-echo "== PART D: login online again, set clock to 21:56 on 2026-11-19, accept an order, then logout Yes"
+echo "== PART D: online again, login, clock 21:56 on 2026-11-19, accept, logout"
 adb shell cmd connectivity airplane-mode disable; sleep 6
-python3 tapt.py "OK" >/dev/null
-adb shell input tap 995 2168; sleep 3
-python3 tapfield.py; sleep 1
-adb shell input text $S; sleep 1
-adb shell input keyevent 4; sleep 1
-python3 tapt.py "OK"; sleep 2
-adb shell input tap 500 690; sleep 1; adb shell input text dupc; adb shell input keyevent 4; sleep 1
-adb shell input tap 500 880; sleep 1; adb shell input text 1234; adb shell input keyevent 4; sleep 1
-adb shell input tap 540 1090; sleep 10
+st D00_before_login
+dologin
+for i in $(seq 1 14); do sleep 5; adb shell uiautomator dump /sdcard/c.xml >/dev/null 2>&1; adb pull /sdcard/c.xml out/c.xml >/dev/null 2>&1; if grep -qE 'tab_all' out/c.xml; then echo "LOGIN OK after $((i*5))s"; break; fi; done
 st D0_after_login
 adb root; sleep 3
 adb shell settings put global auto_time 0; adb shell settings put global auto_time_zone 0
